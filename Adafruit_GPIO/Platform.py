@@ -25,7 +25,7 @@ import re
 UNKNOWN          = 0
 RASPBERRY_PI     = 1
 BEAGLEBONE_BLACK = 2
-
+MINNOWBOARD      = 3
 
 def platform_detect():
     """Detect if running on the Raspberry Pi or Beaglebone Black and return the
@@ -45,6 +45,15 @@ def platform_detect():
         return BEAGLEBONE_BLACK
     elif plat.lower().find('armv7l-with-glibc2.4') > -1:
         return BEAGLEBONE_BLACK
+        
+    # Handle Minnowboard
+    # Assumption is that mraa is installed
+    try: 
+        import mraa 
+        if mraa.getPlatformName()=='MinnowBoard MAX':
+            return MINNOWBOARD
+    except ImportError:
+        pass
     
     # Couldn't figure out the platform, just return unknown.
     return UNKNOWN
@@ -77,6 +86,7 @@ def pi_version():
     # Check /proc/cpuinfo for the Hardware field value.
     # 2708 is pi 1
     # 2709 is pi 2
+    # 2835 is pi 3 on 4.9.x kernel
     # Anything else is not a pi.
     with open('/proc/cpuinfo', 'r') as infile:
         cpuinfo = infile.read()
@@ -92,6 +102,9 @@ def pi_version():
     elif match.group(1) == 'BCM2709':
         # Pi 2
         return 2
+    elif match.group(1) == 'BCM2835':
+        # Pi 3 / Pi on 4.9.x kernel
+        return 3
     else:
         # Something else, not a pi.
         return None

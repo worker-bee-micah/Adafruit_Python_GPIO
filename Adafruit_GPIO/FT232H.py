@@ -29,7 +29,7 @@ import time
 
 import ftdi1 as ftdi
 
-import GPIO
+import Adafruit_GPIO.GPIO as GPIO
 
 
 logger = logging.getLogger(__name__)
@@ -112,9 +112,8 @@ def enumerate_device_serials(vid=FT232H_VID, pid=FT232H_PID):
         while device_list is not None:
             # Get USB device strings and add serial to list of devices.
             ret, manufacturer, description, serial = ftdi.usb_get_strings(ctx, device_list.dev, 256, 256, 256)
-            if ret < 0:
-                raise RuntimeError('ftdi_usb_get_strings returned error {0}: {1}'.format(ret, ftdi.get_error_string(self._ctx)))
-            devices.append(serial)
+            if serial is not None:
+                devices.append(serial)
             device_list = device_list.next
         return devices
     finally:
@@ -346,9 +345,9 @@ class FT232H(GPIO.BaseGPIO):
         pins can be provided in the values dict (with pin name to pin value).
         """
         # General implementation that can be improved by subclasses.
-        for pin, mode in pins.iteritems():
+        for pin, mode in iter(pins.items()):
             self._setup_pin(pin, mode)
-        for pin, value in values.iteritems():
+        for pin, value in iter(values.items()):
             self._output_pin(pin, value)
         if write:
             self.mpsse_write_gpio()
@@ -372,7 +371,7 @@ class FT232H(GPIO.BaseGPIO):
         name to pin value (HIGH/True for 1, LOW/False for 0).  All provided pins
         will be set to the given values.
         """
-        for pin, value in pins.iteritems():
+        for pin, value in iter(pins.items()):
             self._output_pin(pin, value)
         if write:
             self.mpsse_write_gpio()
@@ -380,10 +379,15 @@ class FT232H(GPIO.BaseGPIO):
     def input(self, pin):
         """Read the specified pin and return HIGH/true if the pin is pulled high,
         or LOW/false if pulled low."""
-        if pin < 0 or pin > 15:
+        return self.input_pins([pin])[0]
+
+    def input_pins(self, pins):
+        """Read multiple pins specified in the given list and return list of pin values
+        GPIO.HIGH/True if the pin is pulled high, or GPIO.LOW/False if pulled low."""
+        if [pin for pin in pins if pin < 0 or pin > 15]:
             raise ValueError('Pin must be between 0 and 15 (inclusive).')
-        pins = self.mpsse_read_gpio()
-        return ((pins >> pin) & 0x0001) == 1
+        _pins = self.mpsse_read_gpio()
+        return [((_pins >> pin) & 0x0001) == 1 for pin in pins]
 
 
 class SPI(object):

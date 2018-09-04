@@ -20,22 +20,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 import logging
+import os
 import subprocess
-
-import smbus
 
 import Adafruit_GPIO.Platform as Platform
 
 
 def reverseByteOrder(data):
-    """Reverses the byte order of an int (16-bit) or long (32-bit) value."""
-    # Courtesy Vishal Sapre
-    byteCount = len(hex(data)[2:].replace('L','')[::2])
-    val       = 0
-    for i in range(byteCount):
-        val    = (val << 8) | (data & 0xff)
-        data >>= 8
-    return val
+    """DEPRECATED: See https://github.com/adafruit/Adafruit_Python_GPIO/issues/48"""
+    # # Courtesy Vishal Sapre
+    # byteCount = len(hex(data)[2:].replace('L','')[::2])
+    # val       = 0
+    # for i in range(byteCount):
+    #     val    = (val << 8) | (data & 0xff)
+    #     data >>= 8
+    # return val
+    raise RuntimeError('reverseByteOrder is deprecated! See: https://github.com/adafruit/Adafruit_Python_GPIO/issues/48')
 
 def get_default_bus():
     """Return the default bus number based on the device platform.  For a
@@ -56,14 +56,14 @@ def get_default_bus():
     else:
         raise RuntimeError('Could not determine default I2C bus for platform.')
 
-def get_i2c_device(address, busnum=None, **kwargs):
+def get_i2c_device(address, busnum=None, i2c_interface=None, **kwargs):
     """Return an I2C device for the specified address and on the specified bus.
     If busnum isn't specified, the default I2C bus for the platform will attempt
     to be detected.
     """
     if busnum is None:
         busnum = get_default_bus()
-    return Device(address, busnum, **kwargs)
+    return Device(address, busnum, i2c_interface, **kwargs)
 
 def require_repeated_start():
     """Enable repeated start conditions for I2C register reads.  This is the
@@ -73,7 +73,7 @@ def require_repeated_start():
       http://www.raspberrypi.org/forums/viewtopic.php?f=44&t=15840
     """
     plat = Platform.platform_detect()
-    if plat == Platform.RASPBERRY_PI:
+    if plat == Platform.RASPBERRY_PI and os.path.exists('/sys/module/i2c_bcm2708/parameters/combined'):
         # On the Raspberry Pi there is a bug where register reads don't send a
         # repeated start condition like the kernel smbus I2C driver functions
         # define.  As a workaround this bit in the BCM2708 driver sysfs tree can
@@ -85,14 +85,21 @@ def require_repeated_start():
 
 
 class Device(object):
-    """Class for communicating with an I2C device using the smbus library.
-    Allows reading and writing 8-bit, 16-bit, and byte array values to registers
+    """Class for communicating with an I2C device using the adafruit-pureio pure
+    python smbus library, or other smbus compatible I2C interface. Allows reading
+    and writing 8-bit, 16-bit, and byte array values to registers
     on the device."""
-    def __init__(self, address, busnum):
+    def __init__(self, address, busnum, i2c_interface=None):
         """Create an instance of the I2C device at the specified address on the
         specified I2C bus number."""
         self._address = address
-        self._bus = smbus.SMBus(busnum)
+        if i2c_interface is None:
+            # Use pure python I2C interface if none is specified.
+            import Adafruit_PureIO.smbus
+            self._bus = Adafruit_PureIO.smbus.SMBus(busnum)
+        else:
+            # Otherwise use the provided class to create an smbus interface.
+            self._bus = i2c_interface(busnum)
         self._logger = logging.getLogger('Adafruit_I2C.Device.Bus.{0}.Address.{1:#0X}' \
                                 .format(busnum, address))
 
